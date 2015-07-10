@@ -18,9 +18,6 @@
 %
 % All inputs must be strings (so, delimited with quotes '')
 %
-% The last input is the name of the file to be created,
-% which will contain the current content of the 1st stack level.
-%
 % Vertex coordinates (for DPV) or the face indices (for DPF)
 % will be the same as for the last DPV/DPF file loaded.
 %
@@ -38,7 +35,7 @@ try %#ok
     
     % Disable memory dump on SIGTERM
     sigterm_dumps_octave_core(0);
-    
+ 
     % Print usage if no inputs are given
     if isempty(varargin) || strcmp(varargin{1},'-q'),
         fprintf('Do some simple calculations using RPN notation.\n');
@@ -59,9 +56,6 @@ try %#ok
         fprintf('\n');
         fprintf('All inputs must be strings (so, delimited with quotes '''')\n');
         fprintf('\n');
-        fprintf('The last input is the name of the file to be created,\n');
-        fprintf('which will contain the current content of the 1st stack level.\n');
-        fprintf('\n');
         fprintf('Vertex coordinates (for DPV) or the face indices (for DPF)\n');
         fprintf('will be the same as for the last DPV/DPF file loaded.\n');
         fprintf('\n');
@@ -79,8 +73,8 @@ end
 nargin = numel(varargin);
 
 % Define the operators
-opadd   = {'+';'-'};
-opmul   = {'*';'/';'^'};
+opadd   = {'+','-'};
+opmul   = {'*','/','\','^'};
 oplogic = {'<','>','<=','>=','==','~='};
 opmat   = {'**','//','\\','^^'};
 
@@ -98,11 +92,10 @@ for a = 1:nargin,
             fprintf('Loading file: %s',stack{1})
             [~,~,fext] = fileparts(stack{1});
             if any(strcmpi(fext,{'.dpv','.dpf','.dpx','.asc'})),
-                fprintf('(as DPX file)\n');
-                isdpx = true;
-                [dat,crd,idx] = dpxread(stack{1});
+                fprintf(' (as DPX file)\n');
+                dat = dpxread(stack{1});
             elseif any(strcmpi(fext,{'.mat'})),
-                fprintf('(as MAT file)\n');
+                fprintf(' (as MAT file)\n');
                 tmp = load(stack{1});
                 fields = fieldnames(tmp);
                 if numel(fields) > 1,
@@ -111,11 +104,12 @@ for a = 1:nargin,
                 dat = tmp.(fields{1});
                 clear tmp fields;
             else
-                fprintf('(as CSV file)\n');
-                isdpx = false;
+                fprintf(' (as CSV file)\n');
                 dat = csvread(stack{1});
             end
             stack{1} = dat;
+        else
+            error('File %s not found.\n',stack{1});
         end
         
     elseif strcmpi('save',varargin{a}),
@@ -124,13 +118,21 @@ for a = 1:nargin,
         
         % Only DPX and CSV supported at the moment. The data remains
         % in the stack. Use 'drop' to get rid of it if necessary
-        fprintf('Saving file: %s\n',stack{1})
-        if isdpx,
-            dpxwrite(stack{1},double(stack{2}),crd,idx);
+        fprintf('Saving file: %s',stack{1})
+        [~,~,fext] = fileparts(stack{1});
+        if any(strcmpi(fext,{'.dpv','.dpf','.dpx','.asc'})),
+            fprintf(' (as DPX file)\n');
+            dpxwrite(stack{1},double(stack{2}));
+        elseif any(strcmpi(fext,{'.mat'})),
+            fprintf(' (as MAT file)\n');
+            tmp = stack{2}; %#ok
+            save(stack{1},'tmp','-v7.3');
+            clear tmp;
         else
+            fprintf(' (as CSV file)\n');
             csvwrite(stack{1},double(stack{2}));
-        end
-        stack{1} = [];
+        end         
+        stack(1) = [];
         
     elseif any(strcmp(opadd,varargin{a})),
         
@@ -146,7 +148,7 @@ for a = 1:nargin,
         % MULTIPLY/DIVIDE/POTENTIATE (ELEMENTWISE)
         
         % If the current argument is multiplicative, execute it
-        fprintf('Multiplicating/Dividing/Potentiating (elementwise)\n')
+        fprintf('Multiplying/Dividing/Potentiating (elementwise)\n')
         stack{1} = eval(sprintf('stack{2} .%s stack{1}',varargin{a}));
         stack(2) = [];
         
@@ -155,7 +157,7 @@ for a = 1:nargin,
         % MULTIPLY/DIVIDE/POTENTIATE (MATRIX)
         
         % If the current argument is multiplicative, execute it
-        fprintf('Multiplicating/Dividing/Potentiating (matrix)\n')
+        fprintf('Multiplying/Dividing/Potentiating (matrix)\n')
         stack{1} = eval(sprintf('stack{2} %s stack{1}',varargin{a}(1)));
         stack(2) = [];
         

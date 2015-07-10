@@ -18,9 +18,6 @@ function rpncalc(varargin)
 %
 % All inputs must be strings (so, delimited with quotes '')
 %
-% The last input is the name of the file to be created,
-% which will contain the current content of the 1st stack level.
-%
 % Vertex coordinates (for DPV) or the face indices (for DPF)
 % will be the same as for the last DPV/DPF file loaded.
 %
@@ -59,9 +56,6 @@ try %#ok
         fprintf('\n');
         fprintf('All inputs must be strings (so, delimited with quotes '''')\n');
         fprintf('\n');
-        fprintf('The last input is the name of the file to be created,\n');
-        fprintf('which will contain the current content of the 1st stack level.\n');
-        fprintf('\n');
         fprintf('Vertex coordinates (for DPV) or the face indices (for DPF)\n');
         fprintf('will be the same as for the last DPV/DPF file loaded.\n');
         fprintf('\n');
@@ -79,8 +73,8 @@ end
 nargin = numel(varargin);
 
 % Define the operators
-opadd   = {'+';'-'};
-opmul   = {'*';'/';'^'};
+opadd   = {'+','-'};
+opmul   = {'*','/','\','^'};
 oplogic = {'<','>','<=','>=','==','~='};
 opmat   = {'**','//','\\','^^'};
 
@@ -99,7 +93,7 @@ for a = 1:nargin,
             [~,~,fext] = fileparts(stack{1});
             if any(strcmpi(fext,{'.dpv','.dpf','.dpx','.asc'})),
                 fprintf(' (as DPX file)\n');
-                [dat,crd,idx] = dpxread(stack{1});
+                dat = dpxread(stack{1});
             elseif any(strcmpi(fext,{'.mat'})),
                 fprintf(' (as MAT file)\n');
                 tmp = load(stack{1});
@@ -114,6 +108,8 @@ for a = 1:nargin,
                 dat = csvread(stack{1});
             end
             stack{1} = dat;
+        else
+            error('File %s not found.\n',stack{1});
         end
         
     elseif strcmpi('save',varargin{a}),
@@ -122,7 +118,7 @@ for a = 1:nargin,
         
         % Only DPX and CSV supported at the moment. The data remains
         % in the stack. Use 'drop' to get rid of it if necessary
-        fprintf('Saving file: %s ',stack{1})
+        fprintf('Saving file: %s',stack{1})
         [~,~,fext] = fileparts(stack{1});
         if any(strcmpi(fext,{'.dpv','.dpf','.dpx','.asc'})),
             fprintf(' (as DPX file)\n');
