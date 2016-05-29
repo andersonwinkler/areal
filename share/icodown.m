@@ -1,0 +1,178 @@
+function icodown(varargin)
+% Downsample a data-per-vertex (DPV), data-per-face (DPF) or
+% surface (SRF) in ASCII format from a higher-order tessellated
+% icosahedron to a lower order one. Note that the DPF
+% file must have been derived from a suface file from either
+% FreeSurfer or Brainder tools. It may not work if the vertices
+% follow a different sequence inside the file.
+%
+% For facewise, the downsampling method is pycnophylactic and,
+% therefore, should be used for quantities that require mass
+% conservation, such as areal quantities.
+% For vertexwise, the method removes the redundant vertices.
+% Consider smoothing if needed before downsampling.
+%
+% Usage:
+% icodown(filein,ntarget,fileout)
+%
+% - filein  : File to be downsampled.
+% - ntarget : Icosahedron order of the downsampled file.
+% - fileout : Output file, downsampled.
+%
+% _____________________________________
+% Anderson M. Winkler
+% Yale University / Institute of Living
+% Apr/2012 (first version)
+% May/2016 (this version, now with vertexwise and surfaces geometry)
+% http://brainder.org
+
+% Do OCTAVE stuff, using TRY to ensure MATLAB compatibility
+try
+    % Get the inputs
+    varargin = argv();
+    
+    % Disable memory dump on SIGTERM
+    sigterm_dumps_octave_core(0);
+    
+    % Print usage if no inputs are given
+    if isempty(varargin) || strcmp(varargin{1},'-q'),
+        fprintf('Downsample a DPF file from a higher-order tessellated\n');
+        fprintf('Downsample a data-per-vertex (DPV), data-per-face (DPF) or\n');
+        fprintf('surface (SRF) in ASCII format from a higher-order tessellated\n');
+        fprintf('icosahedron to a lower order one. Note that the DPF\n');
+        fprintf('file must have been derived from a suface file from either\n');
+        fprintf('FreeSurfer or Brainder tools. It may not work if the vertices\n');
+        fprintf('follow a different sequence inside the file.\n');
+        fprintf('\n');
+        fprintf('For facewise, the downsampling method is pycnophylactic and,\n');
+        fprintf('therefore, should be used for quantities that require mass\n');
+        fprintf('conservation, such as areal quantities.\n');
+        fprintf('For vertexwise, the method removes the redundant vertices.\n');
+        fprintf('Consider smoothing if needed before downsampling.\n');
+        fprintf('\n');
+        fprintf('Usage:\n');
+        fprintf('icodown(filein,ntarget,fileout)\n');
+        fprintf('\n');
+        fprintf('- filein  : File to be downsampled.\n');
+        fprintf('- ntarget : Icosahedron order of the downsampled file.\n');
+        fprintf('- fileout : Output file, downsampled.\n');
+        fprintf('\n');
+        fprintf('_____________________________________\n');
+        fprintf('Anderson M. Winkler\n');
+        fprintf('Yale University / Institute of Living\n');
+        fprintf('Apr/2012 (first version)\n');
+        fprintf('May/2016 (this version, now with vertexwise and surfaces geometry)\n');
+        fprintf('http://brainder.org\n');
+        return;
+    end
+end
+
+% Accept arguments
+filein  = varargin{1};
+ntarget = varargin{2};
+fileout = varargin{3};
+
+% Constants for the icosahedron
+V0 = 12;
+F0 = 20;
+
+% Read data from disk. Try first with dpx, then srf, then give up
+try
+    [dpx,crd,idx] = dpxread(filein);
+    nX = numel(dpx);
+    ftype = 'dpx';
+catch
+    try
+        [vtx,fac] = srfread(filein);
+        nV = size(vtx,1);
+        ftype = 'srf';
+    catch
+        error('File %s not recognised as either DPX (curvature) or SRF (surface).',filein);
+    end
+end
+
+switch ftype,
+    
+    case 'srf',
+        
+        % Find icosahedron order
+        n = round(log((nV-2)/(V0-2))/log(4));
+        
+        % Sanity check
+        if nV ~= 4^n*(V0-2)+2,
+            error('Data not from icosahedron.');
+        elseif ntarget >= n,
+            error('This script only downsamples data.');
+        else
+            fprintf('Downsampling surface geometry:');
+        end
+        
+        % Remove vertices:
+        vtx = vtx(1:(4^ntarget*(V0-2)+2),:);
+        
+        % Remove face indices:
+        for j = (n-1):-1:ntarget,
+            fprintf(' %d',j);
+            nVj    = 4^j*(V0-2)+2;
+            facnew = zeros(4^j*F0,3);
+            fout   = find(all(fac > nVj,2));
+            for f = 1:numel(fout),
+                vidx = fac(fout(f),:);
+                ftomerge = fac(sum(...
+                    fac == vidx(1) | ...
+                    fac == vidx(2) | ...
+                    fac == vidx(3),2) == 2,:);
+                facnew(f,:) = sum(ftomerge.*(ftomerge <= nVj),1);
+            end
+            fac = facnew;
+        end
+        fprintf('. Done.\n');
+        
+        % Save to disk
+        srfwrite(vtx,fac,fileout);
+        
+    case 'dpx',
+        
+        % Detect what kind of data this is
+        if mod(nX,10),
+            
+            % Find icosahedron order
+            n = round(log((nX-2)/(V0-2))/log(4));
+            
+            % Sanity check
+            if nX ~= 4^n*(V0-2)+2,
+                error('Data not from icosahedron.');
+            elseif ntarget >= n,
+                error('This script only downsamples data.');
+            else
+                fprintf('Downsampling vertexwise data.\n');
+            end
+            
+            % Downsample vertices!
+            dpx = dpx(1:(4^ntarget*(V0-2)+2));
+            
+        else
+            
+            % Find icosahedron order
+            n = round(log(nX/F0)/log(4));
+            
+            % Sanity check
+            if nX ~= 4^n*F0,
+                error('Data not from icosahedron.');
+            elseif ntarget >= n,
+                error('This script only downsamples data.')
+            else
+                fprintf('Downsampling facewise data.\n');
+            end
+            
+            % Downsample faces!
+            for d = 1:(n-ntarget),
+                dpx = reshape(dpx,[4 nX/4]);
+                dpx = sum(dpx)';
+            end
+        end
+        
+        % Save to disk
+        nXdown = numel(dpx);
+        dpxwrite(fileout,dpx,crd(1:nXdown,:),idx(1:nXdown,1));
+end
