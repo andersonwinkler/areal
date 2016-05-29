@@ -13,11 +13,14 @@ function icodown(varargin)
 % Consider smoothing if needed before downsampling.
 %
 % Usage:
-% icodown(filein,ntarget,fileout)
+% icodown(filein,ntarget,fileout,surface)
 %
 % - filein  : File to be downsampled.
 % - ntarget : Icosahedron order of the downsampled file.
 % - fileout : Output file, downsampled.
+% - suface  : Optional. For facewise, if the face indices aren't
+%             ordered in the usual manner, entering a surface
+%             is necessary to merge the faces correctly.
 %
 % _____________________________________
 % Anderson M. Winkler
@@ -51,11 +54,14 @@ try
         fprintf('Consider smoothing if needed before downsampling.\n');
         fprintf('\n');
         fprintf('Usage:\n');
-        fprintf('icodown(filein,ntarget,fileout)\n');
+        fprintf('icodown <filein> <ntarget> <fileout> [surface]\n');
         fprintf('\n');
         fprintf('- filein  : File to be downsampled.\n');
         fprintf('- ntarget : Icosahedron order of the downsampled file.\n');
         fprintf('- fileout : Output file, downsampled.\n');
+        fprintf('- suface  : Optional. For facewise, if the face indices aren''t\n');
+        fprintf('            ordered in the usual manner, entering a surface\n');
+        fprintf('            is necessary to merge the faces correctly.\n');
         fprintf('\n');
         fprintf('_____________________________________\n');
         fprintf('Anderson M. Winkler\n');
@@ -68,6 +74,7 @@ try
 end
 
 % Accept arguments
+nargin  = numel(varargin);
 filein  = varargin{1};
 ntarget = varargin{2};
 fileout = varargin{3};
@@ -162,13 +169,42 @@ switch ftype,
             elseif ntarget >= n,
                 error('This script only downsamples data.')
             else
-                fprintf('Downsampling facewise data.\n');
+                fprintf('Downsampling facewise data:');
             end
             
-            % Downsample faces!
-            for d = 1:(n-ntarget),
-                dpx = reshape(dpx,[4 nX/4]);
-                dpx = sum(dpx)';
+            % If a surface was given
+            if nargin == 4,
+
+                % Load it
+                [~,fac] = srfread(filein);
+                
+                % Downsample faces (general case)
+                for j = (n-1):-1:ntarget,
+                    fprintf(' %d',j);
+                    nVj    = 4^j*(V0-2)+2;
+                    facnew = zeros(4^j*F0,3);
+                    fout   = find(all(fac > nVj,2));
+                    dpfnew = dpf(fout);
+                    for f = 1:numel(fout),
+                        vidx = fac(fout(f),:);
+                        fidx = sum(...
+                            fac == vidx(1) | ...
+                            fac == vidx(2) | ...
+                            fac == vidx(3),2) == 2;
+                        ftomerge = fac(fidx,:);
+                        facnew(f,:) = sum(ftomerge.*(ftomerge <= nVj),1);
+                        dpfnew(f) = dpfnew + sum(dpf(fidx));
+                    end
+                    fac = facnew;
+                end
+                fprintf('. Done.\n');
+                
+            else
+                % Downsample faces (platonic only)
+                for d = 1:(n-ntarget),
+                    dpx = reshape(dpx,[4 nX/4]);
+                    dpx = sum(dpx)';
+                end
             end
         end
         
