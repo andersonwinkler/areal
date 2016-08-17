@@ -155,8 +155,8 @@ switch ftype,
                 fprintf('Downsampling vertexwise data.\n');
             end
             
-            % Downsample vertices!
-            dpx = dpx(1:(4^ntarget*(V0-2)+2));
+            % Downsample vertices
+            dpx = dpx(1:(4^ntarget*(V0-2)+2),:,:,:);
             
         else
             
@@ -184,7 +184,7 @@ switch ftype,
                     nVj    = 4^j*(V0-2)+2;
                     facnew = zeros(4^j*F0,3);
                     fout   = find(all(fac > nVj,2));
-                    dpfnew = dpf(fout);
+                    dpfnew = dpf(fout,:,:,:);
                     for f = 1:numel(fout),
                         vidx = fac(fout(f),:);
                         fidx = sum(...
@@ -193,7 +193,7 @@ switch ftype,
                             fac == vidx(3),2) == 2;
                         ftomerge = fac(fidx,:);
                         facnew(f,:) = sum(ftomerge.*(ftomerge <= nVj),1);
-                        dpfnew(f) = dpfnew + sum(dpf(fidx));
+                        dpfnew(f,:,:,:) = dpfnew(f,:,:,:) + sum(dpf(fidx,:,:,:),1);
                     end
                     fac = facnew;
                 end
@@ -202,13 +202,17 @@ switch ftype,
             else
                 % Downsample faces (platonic only)
                 for d = 1:(n-ntarget),
-                    dpx = reshape(dpx,[4 nX/4]);
-                    dpx = sum(dpx)';
+                    siz = size(dpx);
+                    siz(1) = siz(1)/4;
+                    dpxnew = zeros(siz);
+                    for n = 1:size(dpx,4);
+                        dpxnew(:,1,1,n) = sum(reshape(dpx(:,1,1,n),[4 nX/4]))';
+                    end
                 end
             end
         end
         
         % Save to disk
-        nXdown = numel(dpx);
+        nXdown = size(dpx,1);
         dpxwrite(fileout,dpx,crd(1:nXdown,:),idx(1:nXdown,1));
 end
